@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kenali Kacang Kering</title>
+<meta name="description" content="Prediksi varietas kacang kering dari ukuran dan bentuk bijinya dengan model Random Forest.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%AB%98%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="blob b1" aria-hidden="true"></span><span class="blob b2" aria-hidden="true"></span>
+    <h1>Kenali jenis kacang kering dari bentuk bijinya</h1>
+    <p>Atur ukuran dan bentuk biji, lalu model Random Forest langsung menebak varietasnya dari {{ cfg.classes|length }} jenis yang dikenal.</p>
+    <div class="chips">
+      <span class="chip">Akurasi uji {{ '%.1f'|format(cfg.accuracy*100) }}%</span>
+      <span class="chip">{{ cfg.features|length }} fitur geometri</span>
+      <span class="chip">{{ cfg.classes|length }} varietas</span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Halaman">
+    <button class="tab" role="tab" id="tab-prediksi" aria-controls="view-prediksi" aria-selected="true">Prediksi</button>
+    <button class="tab" role="tab" id="tab-tentang" aria-controls="view-tentang" aria-selected="false">Tentang model</button>
+  </nav>
+
+  <noscript><div class="card"><p class="card-sub">Halaman ini membutuhkan JavaScript untuk menampilkan prediksi.</p></div></noscript>
+
+  <!-- ===================== PREDIKSI ===================== -->
+  <main id="view-prediksi" class="view grid" role="tabpanel" aria-labelledby="tab-prediksi">
+    <div class="col-left">
+      <section class="card">
+        <h2 class="card-title">Mulai dari contoh</h2>
+        <p class="card-sub">Pilih varietas untuk mengisi nilai tipikalnya, lalu ubah sesuka Anda.</p>
+        <div class="presets">
+          {% for c in cfg.classes %}
+          <button type="button" class="preset" data-class="{{ c.name }}" style="--c: {{ c.color }}"><i></i>{{ c.label }}</button>
+          {% endfor %}
+          <button type="button" class="preset reset" id="reset">Reset</button>
+        </div>
+      </section>
+
+      {% for g in cfg.groups %}
+      <section class="card">
+        <h2 class="card-title">{{ g.title }}</h2>
+        {% if g.sub %}<p class="card-sub">{{ g.sub }}</p>{% endif %}
+        <div class="fields">
+          {% for f in g.features %}
+          <div class="field">
+            <div class="field-head">
+              <label for="n-{{ f.name }}">{{ f.label }}</label>
+              <input type="number" id="n-{{ f.name }}" class="num" data-f="{{ f.name }}" step="any"
+                     min="{{ f.min }}" max="{{ f.max }}" value="{{ f.median }}" inputmode="decimal">
+            </div>
+            <input type="range" class="range" data-f="{{ f.name }}" aria-label="{{ f.label }}"
+                   min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}" value="{{ f.median }}">
+          </div>
+          {% endfor %}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
+
+    <aside class="col-right" aria-live="polite">
+      <div class="sticky">
+        <div class="result" id="res-card" style="--c:#0E7C66">
+          <div class="lead">Model menebak biji ini adalah</div>
+          <div class="name" id="res-name">…</div>
+          <div class="conf"><b id="res-conf">–</b><span>yakin</span></div>
+          <div class="meter"><i id="res-meter" style="width:0%"></i></div>
+        </div>
+        <div class="warn" id="res-warn" hidden></div>
+        <section class="card">
+          <h2 class="card-title">Peluang tiap varietas</h2>
+          <div class="bars" id="bars">
+            {% for c in cfg.classes %}
+            <div class="row" data-class="{{ c.name }}">
+              <div class="lab"><span class="dot" style="background: {{ c.color }}"></span>{{ c.label }}</div>
+              <div class="track"><div class="fill" style="background: {{ c.color }}; width:0%"></div></div>
+              <div class="val">0%</div>
+            </div>
+            {% endfor %}
+          </div>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ===================== TENTANG ===================== -->
+  <main id="view-tentang" class="view" role="tabpanel" aria-labelledby="tab-tentang" hidden>
+    <div class="tiles">
+      <div class="tile"><div class="k">Akurasi pada data uji</div><div class="v">{{ '%.2f'|format(cfg.accuracy*100) }}%</div></div>
+      <div class="tile"><div class="k">Macro F1-score</div><div class="v">{{ '%.3f'|format(cfg.macro_f1) }}</div></div>
+      <div class="tile"><div class="k">Jumlah pohon</div><div class="v">{{ cfg.n_estimators }}</div></div>
+      <div class="tile"><div class="k">Kedalaman maksimum</div><div class="v">{{ 'tanpa batas' if cfg.max_depth is none else cfg.max_depth }}</div></div>
+    </div>
+
+    <div class="grid2">
+      <section class="card">
+        <h2 class="card-title">Fitur yang paling menentukan</h2>
+        <p class="card-sub">Makin panjang batang, makin sering fitur itu dipakai model untuk membedakan varietas.</p>
+        <div class="bars wide">
+          {% for i in cfg.importance %}
+          <div class="row"><div class="lab">{{ i.label }}</div>
+            <div class="track"><div class="fill grad" style="width: {{ '%.0f'|format(i.pct) }}%"></div></div>
+            <div class="val">{{ '%.3f'|format(i.value) }}</div></div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <div class="stack">
+        <section class="card">
+          <h2 class="card-title">Profil tiap varietas</h2>
+          <p class="card-sub">Nilai median dari data latih.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Varietas</th>{% for c in cfg.profile_cols %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for r in cfg.profile %}<tr><td>{{ r.label }}</td>{% for v in r['values'] %}<td>{{ '{:,.2f}'.format(v) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+          </table></div>
+        </section>
+        <section class="card">
+          <h2 class="card-title">Cara kerjanya</h2>
+          <p class="card-sub">Random Forest membangun ratusan pohon keputusan dari cuplikan data yang berbeda-beda. Setiap pohon memberi satu suara, dan varietas dengan suara terbanyak menjadi hasil prediksi.</p>
+          <p class="card-sub">Data: Dry Bean Dataset (Koklu &amp; Ozkan, 2020), UCI Machine Learning Repository. Nilai masukan berasal dari pengolahan citra, dalam satuan piksel.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="foot">Random Forest · Dry Bean Dataset · Dibuat untuk tugas Pembelajaran Mesin</footer>
+</div>
+
+<!-- bar ringkas untuk layar kecil -->
+<div class="minibar" id="minibar" style="--c:#0E7C66" aria-hidden="true">
+  <span class="mini-name" id="mini-name">…</span><span class="mini-conf" id="mini-conf"></span>
+</div>
+
+<script id="cfg" type="application/json">{{ cfg|tojson }}</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
